@@ -1,7 +1,9 @@
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const routes = require('./routes');
 const notFound = require('./middleware/notFound');
@@ -13,8 +15,25 @@ const app = express();
 // Render (and most hosts) sit behind a proxy: needed for Secure cookies and correct client IPs.
 app.set('trust proxy', 1);
 
+// Security headers: Content-Security-Policy, X-Content-Type-Options, HSTS, no X-Powered-By, and more.
+app.use(helmet());
+
 // Only our own front end may call the API with cookies.
 app.use(cors({ origin: clientUrl, credentials: true }));
+
+// A general ceiling on requests per IP, on top of the stricter limit on /api/auth.
+app.use(
+  '/api',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 300,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skip: () => isTest,
+  })
+);
+
+// Phase 4: the Stripe webhook route (which needs the raw body) is mounted here, before express.json().
 
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
