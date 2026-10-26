@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const authRoutes = require('./authRoutes');
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Phase 2 adds: router.use('/auth', authRoutes);
+router.use('/auth', authRoutes);
+// Phase 3 adds: router.use('/restaurants', ...), router.use('/menu', ...), router.use('/orders', ...)
 
 module.exports = router;
