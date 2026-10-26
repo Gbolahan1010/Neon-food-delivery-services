@@ -26,4 +26,11 @@ describe('Health check and error handling', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/not valid JSON/);
   });
+
+  it('sends security headers', async () => {
+    const res = await request(app).get('/api/health');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['content-security-policy']).toBeDefined();
+    expect(res.headers['x-powered-by']).toBeUndefined();
+  });
 });
