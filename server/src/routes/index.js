@@ -4,6 +4,7 @@ const authRoutes = require('./authRoutes');
 const restaurantRoutes = require('./restaurantRoutes');
 const menuRoutes = require('./menuRoutes');
 const orderRoutes = require('./orderRoutes');
+const adminRoutes = require('./adminRoutes');
 
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.use('/auth', authRoutes);
 router.use('/restaurants', restaurantRoutes);
 router.use(menuRoutes); // /restaurants/:id/menu and /menu/:itemId
 router.use('/orders', orderRoutes);
+router.use('/admin', adminRoutes);
 
 module.exports = router;
