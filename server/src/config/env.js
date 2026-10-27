@@ -31,4 +31,8 @@ module.exports = {
   cookieSameSite: process.env.COOKIE_SAMESITE || 'lax',
   // Lower cost in tests keeps the suite fast; 12 is the production work factor.
   bcryptRounds: isTest ? 4 : 12,
+  // OpenStreetMap's usage policy asks every app to identify itself.
+  geocoderUserAgent:
+    process.env.GEOCODER_USER_AGENT ||
+    'NeonFoodDelivery/1.0 (student project, Dublin Business School)',
 };
