@@ -46,6 +46,29 @@ describe('geocoding with OpenStreetMap Nominatim', () => {
     expect(addressToQuery(address)).toBe('1 Grafton Street, Dublin 2, D02 AB12, Ireland');
   });
 
+  it('leaves the apartment line out of the search', () => {
+    expect(addressToQuery({ ...address, line2: 'Apartment 4' })).toBe(
+      '1 Grafton Street, Dublin 2, D02 AB12, Ireland'
+    );
+  });
+
+  it('tries again without the Eircode when the full address is not found', async () => {
+    const reply = (body) =>
+      new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockImplementationOnce(async () => reply([]))
+      .mockImplementationOnce(async () =>
+        reply([{ lat: '53.3417', lon: '-6.2596', display_name: 'Grafton Street, Dublin' }])
+      );
+
+    const result = await geocode({ ...address, eircode: 'D02 XX99' });
+
+    expect(result).toMatchObject({ lat: 53.3417, lng: -6.2596 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(decodeURIComponent(fetchSpy.mock.calls[1][0])).not.toMatch(/D02/);
+  });
+
   it('calls Nominatim with a User-Agent and returns numeric coordinates', async () => {
     const fetchSpy = mockGeocode(GRAFTON_STREET);
     const result = await geocode(address);

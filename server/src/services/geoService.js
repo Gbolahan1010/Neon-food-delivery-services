@@ -10,8 +10,12 @@ const { geocoderUserAgent } = require('../config/env');
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const TIMEOUT_MS = 5000;
 
-function addressToQuery({ line1, line2, city, eircode } = {}) {
-  return [line1, line2, city, eircode, 'Ireland']
+/**
+ * The search text for an address. The apartment line (line2) is left out because flat
+ * numbers confuse the lookup and do not change the delivery distance.
+ */
+function addressToQuery({ line1, city, eircode } = {}, { withEircode = true } = {}) {
+  return [line1, city, withEircode ? eircode : null, 'Ireland']
     .filter(Boolean)
     .map((part) => String(part).trim())
     .join(', ');
@@ -55,30 +59,34 @@ async function callNominatim(query) {
  * Throws 422 when the address cannot be found and 503 when the service is down.
  */
 async function geocode(address) {
-  const query = addressToQuery(address);
-  const key = query.toLowerCase();
+  // Try the full address first. If an Eircode is mistyped or unknown to OpenStreetMap,
+  // try again with just the street and town, which is still accurate enough for delivery.
+  const queries = [addressToQuery(address)];
+  if (address && address.eircode) queries.push(addressToQuery(address, { withEircode: false }));
 
-  const cached = await GeocodeCache.findOne({ query: key }).lean();
-  if (cached) return { lat: cached.lat, lng: cached.lng, displayName: cached.displayName };
+  for (const query of queries) {
+    const key = query.toLowerCase();
+    const cached = await GeocodeCache.findOne({ query: key }).lean();
+    if (cached) return { lat: cached.lat, lng: cached.lng, displayName: cached.displayName };
 
-  const results = await callNominatim(query);
-  if (!Array.isArray(results) || results.length === 0) {
-    throw new AppError(
-      'We could not find that address. Check the street and city, or add an Eircode.',
-      422
-    );
+    const results = await callNominatim(query);
+    if (Array.isArray(results) && results.length > 0) {
+      // Nominatim returns coordinates as strings: convert and check them before trusting them.
+      const lat = Number(results[0].lat);
+      const lng = Number(results[0].lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new AppError('The address lookup service sent an unexpected reply.', 502);
+      }
+      const location = { lat, lng, displayName: results[0].display_name };
+      await GeocodeCache.updateOne({ query: key }, { $set: location }, { upsert: true });
+      return location;
+    }
   }
 
-  // Nominatim returns coordinates as strings: convert and check them before trusting them.
-  const lat = Number(results[0].lat);
-  const lng = Number(results[0].lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new AppError('The address lookup service sent an unexpected reply.', 502);
-  }
-
-  const location = { lat, lng, displayName: results[0].display_name };
-  await GeocodeCache.updateOne({ query: key }, { $set: location }, { upsert: true });
-  return location;
+  throw new AppError(
+    'We could not find that address. Check the street and town, or remove the Eircode.',
+    422
+  );
 }
 
 module.exports = { geocode, addressToQuery };
