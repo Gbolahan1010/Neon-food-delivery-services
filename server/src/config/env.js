@@ -35,4 +35,10 @@ module.exports = {
   geocoderUserAgent:
     process.env.GEOCODER_USER_AGENT ||
     'NeonFoodDelivery/1.0 (student project, Dublin Business School)',
+  // Payments are optional: without these keys the app runs and payment routes reply 503.
+  // Tests use dummy values and never contact Stripe.
+  stripeSecretKey:
+    process.env.STRIPE_SECRET_KEY || (isTest ? 'sk_test_dummy_key_for_tests' : undefined),
+  stripeWebhookSecret:
+    process.env.STRIPE_WEBHOOK_SECRET || (isTest ? 'whsec_test_dummy_secret' : undefined),
 };
