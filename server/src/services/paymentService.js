@@ -48,15 +48,21 @@ async function createCheckoutSession(orderId, user) {
   }
 
   const id = order._id.toString();
-  const session = await client.checkout.sessions.create({
-    mode: 'payment',
-    line_items: lineItems,
-    customer_email: user.email,
-    client_reference_id: id,
-    metadata: { orderId: id },
-    success_url: `${clientUrl}/orders/${id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${clientUrl}/orders/${id}?payment=cancelled`,
-  });
+  let session;
+  try {
+    // No customer_email: Stripe's page asks for it, so made-up demo emails can't block a payment.
+    session = await client.checkout.sessions.create({
+      mode: 'payment',
+      line_items: lineItems,
+      client_reference_id: id,
+      metadata: { orderId: id },
+      success_url: `${clientUrl}/orders/${id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl}/orders/${id}?payment=cancelled`,
+    });
+  } catch (err) {
+    // Turn Stripe's error into a clear 502 instead of a generic 500.
+    throw new AppError(`Stripe could not start the payment: ${err.message}`, 502);
+  }
 
   order.stripeSessionId = session.id;
   await order.save();

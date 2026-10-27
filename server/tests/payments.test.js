@@ -89,6 +89,18 @@ describe('Payments with Stripe Checkout', () => {
       expect(paid.status).toBe(409);
     });
 
+    it('reports a clear error if Stripe refuses the request', async () => {
+      jest
+        .spyOn(stripe.checkout.sessions, 'create')
+        .mockRejectedValue(new Error('Invalid API Key provided'));
+      const res = await request(app)
+        .post('/api/payments/checkout')
+        .set('Cookie', customerCookie)
+        .send({ orderId: order._id });
+      expect(res.status).toBe(502);
+      expect(res.body.message).toMatch(/Invalid API Key/);
+    });
+
     it('is for logged-in customers only', async () => {
       const { cookie: ownerCookie } = await createUser('owner');
       expect((await request(app).post('/api/payments/checkout').send({})).status).toBe(401);
