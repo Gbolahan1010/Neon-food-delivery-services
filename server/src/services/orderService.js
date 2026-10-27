@@ -4,10 +4,8 @@ const Restaurant = require('../models/Restaurant');
 const MenuItem = require('../models/MenuItem');
 const AppError = require('../utils/AppError');
 const restaurantService = require('./restaurantService');
+const deliveryService = require('./deliveryService');
 const { getPagination, pageMeta } = require('../utils/pagination');
-
-// Flat fee for now. Phase 4 replaces this with a fee based on delivery distance.
-const DELIVERY_FEE_CENTS = 299;
 
 const euro = (cents) => `€${(cents / 100).toFixed(2)}`;
 
@@ -48,14 +46,27 @@ async function createOrder(data, user) {
     throw AppError.badRequest(`The minimum order here is ${euro(restaurant.minimumOrderCents)}`);
   }
 
+  // Look up the delivery address and charge by distance (OpenStreetMap Nominatim).
+  const delivery = await deliveryService.quote(restaurant, data.deliveryAddress);
+  if (!delivery.withinRange) {
+    throw AppError.badRequest(
+      `That address is ${delivery.distanceKm} km away. This restaurant delivers up to ${delivery.maxDistanceKm} km.`
+    );
+  }
+
   return Order.create({
     customer: user._id,
     restaurant: restaurant._id,
     items,
     subtotalCents,
-    deliveryFeeCents: DELIVERY_FEE_CENTS,
-    totalCents: subtotalCents + DELIVERY_FEE_CENTS,
-    deliveryAddress: data.deliveryAddress,
+    deliveryFeeCents: delivery.deliveryFeeCents,
+    totalCents: subtotalCents + delivery.deliveryFeeCents,
+    deliveryDistanceKm: delivery.distanceKm,
+    deliveryAddress: {
+      ...data.deliveryAddress,
+      lat: delivery.location.lat,
+      lng: delivery.location.lng,
+    },
     notes: data.notes,
     statusHistory: [{ status: 'placed' }],
   });
@@ -133,11 +144,4 @@ async function updateStatus(id, nextStatus, user) {
   return order;
 }
 
-module.exports = {
-  createOrder,
-  listMine,
-  getById,
-  listForRestaurant,
-  updateStatus,
-  DELIVERY_FEE_CENTS,
-};
+module.exports = { createOrder, listMine, getById, listForRestaurant, updateStatus };

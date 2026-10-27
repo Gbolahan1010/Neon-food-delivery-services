@@ -1,8 +1,9 @@
 const request = require('supertest');
 const app = require('../src/app');
 const Order = require('../src/models/Order');
-const { DELIVERY_FEE_CENTS } = require('../src/services/orderService');
+const { feeForDistance } = require('../src/services/deliveryService');
 const { createUser, createRestaurant, createMenuItem } = require('./helpers');
+const { mockGeocode, mockGeocodeNotFound, mockGeocodeDown, CORK } = require('./geoMock');
 
 const address = { line1: '1 Grafton Street', city: 'Dublin 2' };
 
@@ -27,7 +28,7 @@ describe('Orders', () => {
   });
 
   describe('placing an order', () => {
-    it('uses database prices, merges repeated items and adds the delivery fee', async () => {
+    it('uses database prices, merges repeated items and charges delivery by distance', async () => {
       const res = await placeOrder({
         restaurantId: restaurant._id,
         items: [
@@ -46,8 +47,12 @@ describe('Orders', () => {
         quantity: 2,
       });
       expect(order.subtotalCents).toBe(3100);
-      expect(order.deliveryFeeCents).toBe(DELIVERY_FEE_CENTS);
-      expect(order.totalCents).toBe(3100 + DELIVERY_FEE_CENTS);
+      // Capel Street (restaurant) to Grafton Street (customer) is roughly 1 km
+      expect(order.deliveryDistanceKm).toBeGreaterThan(0.5);
+      expect(order.deliveryDistanceKm).toBeLessThan(2);
+      expect(order.deliveryFeeCents).toBe(feeForDistance(order.deliveryDistanceKm));
+      expect(order.totalCents).toBe(3100 + order.deliveryFeeCents);
+      expect(order.deliveryAddress).toMatchObject({ lat: 53.3417, lng: -6.2596 });
       expect(order.status).toBe('placed');
       expect(order.paymentStatus).toBe('pending');
       expect(order.customer).toBe(customer._id.toString());
@@ -110,6 +115,46 @@ describe('Orders', () => {
       });
       expect(res3.status).toBe(400);
       expect(res3.body.message).toMatch(/€50.00/);
+    });
+
+    describe('delivery address lookup', () => {
+      const order = () => ({
+        restaurantId: restaurant._id,
+        items: [{ menuItemId: pizza._id, quantity: 1 }],
+        deliveryAddress: address,
+      });
+
+      it('ignores coordinates sent by the browser and uses the looked-up location', async () => {
+        const res = await placeOrder({
+          ...order(),
+          deliveryAddress: { ...address, lat: 53.3478, lng: -6.2701 }, // pretend to live next door
+        });
+        expect(res.status).toBe(201);
+        expect(res.body.data.deliveryAddress).toMatchObject({ lat: 53.3417, lng: -6.2596 });
+        expect(res.body.data.deliveryDistanceKm).toBeGreaterThan(0.5);
+      });
+
+      it('refuses addresses outside the delivery radius', async () => {
+        mockGeocode(CORK);
+        const res = await placeOrder(order());
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/delivers up to 8 km/);
+        expect(await Order.countDocuments()).toBe(0);
+      });
+
+      it('explains when the address cannot be found', async () => {
+        mockGeocodeNotFound();
+        const res = await placeOrder(order());
+        expect(res.status).toBe(422);
+        expect(res.body.message).toMatch(/could not find that address/);
+      });
+
+      it('fails safely when the address service is down', async () => {
+        mockGeocodeDown();
+        const res = await placeOrder(order());
+        expect(res.status).toBe(503);
+        expect(await Order.countDocuments()).toBe(0);
+      });
     });
 
     it('validates the order and only lets customers place one', async () => {

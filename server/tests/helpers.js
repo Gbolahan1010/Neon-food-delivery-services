@@ -25,7 +25,8 @@ function createRestaurant(owner, overrides = {}) {
     name: 'Test Kitchen',
     description: 'Tasty test food',
     cuisines: ['italian'],
-    address: { line1: '1 Main Street', city: 'Dublin' },
+    // Coordinates of Capel Street, Dublin, so delivery distances in tests are realistic.
+    address: { line1: '1 Main Street', city: 'Dublin', lat: 53.3478, lng: -6.2701 },
     isApproved: true,
     ...overrides,
   });

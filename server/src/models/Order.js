@@ -34,6 +34,7 @@ const orderSchema = new mongoose.Schema(
     subtotalCents: { type: Number, required: true, min: 0 },
     deliveryFeeCents: { type: Number, required: true, min: 0, default: 0 },
     totalCents: { type: Number, required: true, min: 0 },
+    deliveryDistanceKm: { type: Number, min: 0 },
     status: { type: String, enum: STATUSES, default: 'placed' },
     statusHistory: [
       {
@@ -48,6 +49,7 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     stripeSessionId: { type: String },
+    paidAt: { type: Date },
     deliveryAddress: { type: addressSchema, required: true },
     notes: { type: String, trim: true, maxlength: 300 },
   },
