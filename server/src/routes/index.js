@@ -5,6 +5,7 @@ const restaurantRoutes = require('./restaurantRoutes');
 const menuRoutes = require('./menuRoutes');
 const orderRoutes = require('./orderRoutes');
 const adminRoutes = require('./adminRoutes');
+const deliveryRoutes = require('./deliveryRoutes');
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use('/restaurants', restaurantRoutes);
 router.use(menuRoutes); // /restaurants/:id/menu and /menu/:itemId
 router.use('/orders', orderRoutes);
 router.use('/admin', adminRoutes);
+router.use('/delivery', deliveryRoutes);
 
 module.exports = router;
