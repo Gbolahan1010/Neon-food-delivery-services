@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const routes = require('./routes');
+const paymentController = require('./controllers/paymentController');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const { clientUrl, isProd, isTest } = require('./config/env');
@@ -33,11 +34,29 @@ app.use(
   })
 );
 
-// Phase 4: the Stripe webhook route (which needs the raw body) is mounted here, before express.json().
+// Stripe webhook: mounted BEFORE express.json(), because checking Stripe's signature
+// needs the request body exactly as it was sent (raw bytes, not parsed JSON).
+app.post(
+  '/api/payments/webhook',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  paymentController.webhook
+);
 
 app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 if (!isTest) app.use(morgan(isProd ? 'combined' : 'dev'));
+
+// A friendly answer at the API's base address, instead of "Route not found".
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      name: 'Neon Food Delivery API',
+      health: '/api/health',
+      restaurants: '/api/restaurants',
+    },
+  });
+});
 
 app.use('/api', routes);
 
